@@ -1,3 +1,5 @@
+import 'dart:developer';
+
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:get/get.dart';
 
@@ -22,12 +24,30 @@ class HomeController extends GetxController {
     // FlutterBluePlus.stopScan();
     // subscription.cancel();
     // log(devices.toString());
-    final results = await FlutterBluePlus.systemDevices;
+    // final results = await FlutterBluePlus.systemDevices;
+    final results = await FlutterBluePlus.bondedDevices;
+    log(results.toString());
     for (final result in results) {
       devices.add(result);
     }
+    
     isLoading.value = false;
   }
 
-  void connectToDevice(BluetoothDevice device) {}
+  void connectToDevice(BluetoothDevice device) async {
+    
+    await device.connect();
+    // listen for disconnection
+    var subscription = device.connectionState.listen((BluetoothConnectionState state) async {
+      if (state == BluetoothConnectionState.disconnected) {
+        // 1. typically, start a periodic timer that tries to
+        //    reconnect, or just call connect() again right now
+        // 2. you must always re-discover services after disconnection!
+        log("Subscription ${device.disconnectReason} ${device}");
+      }
+    });
+ 
+  
+    log("Subscription for bluetooth ${subscription}");
+  }
 }

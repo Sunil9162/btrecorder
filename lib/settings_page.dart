@@ -77,24 +77,20 @@ class _SettingsPageState extends State<SettingsPage> {
                       controller.connectToDevice(device);
                     },
                     title: Text(
-                      device.platformName.isEmpty
-                          ? device.remoteId.toString()
-                          : device.platformName,
+                      device.platformName.isEmpty ? device.remoteId.toString() : device.platformName,
                     ),
                     subtitle: Text(device.remoteId.toString()),
                     trailing: StreamBuilder<BluetoothConnectionState>(
                       stream: device.connectionState,
                       initialData: BluetoothConnectionState.disconnected,
                       builder: (c, snapshot) {
-                        if (snapshot.data ==
-                            BluetoothConnectionState.connected) {
+                        if (snapshot.data == BluetoothConnectionState.connected) {
                           return const Icon(
                             Icons.bluetooth_connected,
                             color: Colors.green,
                           );
                         }
-                        if (controller.connectingDeviceName.value ==
-                            device.platformName) {
+                        if (controller.connectingDeviceName.value == device.platformName) {
                           return const SizedBox(
                             height: 20,
                             width: 20,
