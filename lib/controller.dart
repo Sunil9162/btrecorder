@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:developer';
 import 'dart:io';
 
+import 'package:battery_plus/battery_plus.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter_nearby_connections/flutter_nearby_connections.dart';
 import 'package:get/get.dart';
@@ -15,13 +17,18 @@ class HomeController extends GetxController {
   RxList<Device> connectedDevices = RxList<Device>();
   Rxn<DeviceType> deviceType = Rxn<DeviceType>();
   final nearbyService = NearbyService();
+
   StreamSubscription? subscription;
   StreamSubscription? receivedDataSubscription;
   RxMap receivedData = RxMap();
+ 
+  
+ 
 
   initConnect() async {
     String devInfo = "";
     DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
+
     if (Platform.isAndroid) {
       AndroidDeviceInfo androidInfo = await deviceInfo.androidInfo;
       devInfo = androidInfo.model;
