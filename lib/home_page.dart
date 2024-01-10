@@ -1,5 +1,9 @@
+import 'dart:developer';
+import 'dart:io';
+
 import 'package:btrecorder/controller.dart';
 import 'package:camera/camera.dart';
+import 'package:file_saver/file_saver.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -25,7 +29,47 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    initCamera();
+    if (Platform.isAndroid || Platform.isIOS) {
+      initCamera();
+    }
+    homeController.receivedData.listen((p0) {
+      final data = p0;
+      if (data['message'] == "StopRecording") {
+        stopRecording();
+      } else if (data['message'] == "StartRecording") {
+        startRecording();
+      }
+    });
+  }
+
+  stopRecording() async {
+    if (isRecording.value) {
+      Get.dialog(const Center(
+        child: CircularProgressIndicator(),
+      ));
+      final file = await controller.stopVideoRecording();
+      // Save File to Local Storage
+      final filepath = await FileSaver.instance.saveFile(
+        name: 'BTRecorder_${DateTime.now().millisecondsSinceEpoch}.mp4',
+        file: File(file.path),
+        mimeType: MimeType.other,
+      );
+      Get.back();
+      log("Saved to $filepath");
+      isRecording.value = false;
+    }
+  }
+
+  startRecording() {
+    if (controller.value.isInitialized) {
+      if (controller.value.isRecordingVideo) {
+        controller.stopVideoRecording();
+        isRecording.value = false;
+      } else {
+        controller.startVideoRecording();
+        isRecording.value = true;
+      }
+    }
   }
 
   Future<void> initCamera() async {
@@ -140,14 +184,16 @@ class _HomePageState extends State<HomePage> {
                         ),
                         GestureDetector(
                           onTap: () async {
-                            if (controller.value.isInitialized) {
-                              if (controller.value.isRecordingVideo) {
-                                await controller.stopVideoRecording();
-                                isRecording.value = false;
-                              } else {
-                                await controller.startVideoRecording();
-                                isRecording.value = true;
-                              }
+                            if (isRecording.value) {
+                              await stopRecording();
+                              homeController.sendData(
+                                "StopRecording",
+                              );
+                            } else {
+                              await startRecording();
+                              homeController.sendData(
+                                "StartRecording",
+                              );
                             }
                           },
                           child: Container(
