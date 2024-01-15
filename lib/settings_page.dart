@@ -1,6 +1,6 @@
 import 'package:btrecorder/controller.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:flutter_nearby_connections/flutter_nearby_connections.dart';
 import 'package:get/get.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -18,100 +18,182 @@ class _SettingsPageState extends State<SettingsPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Bluetooth Recorder'),
+        actions: [
+          IconButton(
+            onPressed: () {
+              controller.deviceType.value = null;
+              controller.disconnect();
+            },
+            icon: const Icon(Icons.restore),
+          ),
+        ],
       ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            Row(
-              children: [
-                const Expanded(
-                  child: Text(
-                    "Bluetooth Devices",
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                Obx(
-                  () => IconButton(
-                    onPressed: () {
-                      if (controller.isLoading.value) {
-                        return;
-                      }
-                      controller.getPairedDevices();
-                    },
-                    icon: controller.isLoading.value
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                            ),
-                          )
-                        : const Icon(
-                            Icons.refresh,
-                            color: Colors.blue,
-                          ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(
-              height: 10,
-            ),
-            Obx(() {
-              if (controller.isLoading.value) {
-                return const Center(
-                  child: CircularProgressIndicator(),
-                );
-              }
-              return ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: controller.devices.length,
-                itemBuilder: (context, index) {
-                  final device = controller.devices[index];
-                  return ListTile(
+      bottomNavigationBar: BottomAppBar(
+        child: Obx(() {
+          return Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (controller.deviceType.value != DeviceType.browser)
+                Expanded(
+                  child: InkWell(
                     onTap: () {
-                      controller.connectToDevice(device);
+                      controller.deviceType.value = DeviceType.advertiser;
+                      controller.initConnect();
                     },
-                    title: Text(
-                      device.platformName.isEmpty ? device.remoteId.toString() : device.platformName,
+                    child: Container(
+                      height: 60,
+                      width: 60,
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                      alignment: Alignment.center,
+                      child: const Text(
+                        'Send',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
-                    subtitle: Text(device.remoteId.toString()),
-                    trailing: StreamBuilder<BluetoothConnectionState>(
-                      stream: device.connectionState,
-                      initialData: BluetoothConnectionState.disconnected,
-                      builder: (c, snapshot) {
-                        if (snapshot.data == BluetoothConnectionState.connected) {
-                          return const Icon(
-                            Icons.bluetooth_connected,
-                            color: Colors.green,
-                          );
-                        }
-                        if (controller.connectingDeviceName.value == device.platformName) {
-                          return const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                            ),
-                          );
-                        }
-                        return const Icon(
-                          Icons.bluetooth,
-                          color: Colors.grey,
-                        );
-                      },
+                  ),
+                ),
+              const SizedBox(width: 10),
+              if (controller.deviceType.value != DeviceType.advertiser)
+                Expanded(
+                  child: InkWell(
+                    onTap: () {
+                      controller.deviceType.value = DeviceType.browser;
+                      controller.initConnect();
+                    },
+                    child: Container(
+                      height: 60,
+                      width: 60,
+                      decoration: BoxDecoration(
+                        color: Colors.blue,
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                      alignment: Alignment.center,
+                      child: const Text(
+                        'Recieve',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
-                  );
-                },
-              );
-            }),
-          ],
-        ).paddingAll(15),
+                  ),
+                ),
+            ],
+          );
+        }),
       ),
+      body: Obx(() {
+        return ListView.builder(
+          padding: const EdgeInsets.all(10),
+          itemCount: controller.getItemCount(),
+          itemBuilder: (context, index) {
+            final device = controller.deviceType.value == DeviceType.advertiser
+                ? controller.connectedDevices[index]
+                : controller.devices[index];
+            return Container(
+              margin: const EdgeInsets.all(8.0),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: GestureDetector(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(device.deviceName),
+                              Text(
+                                getStateName(device.state),
+                                style: TextStyle(
+                                    color: getStateColor(device.state)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      // Request connect
+                      GestureDetector(
+                        onTap: () => controller.onButtonClicked(device),
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 8.0),
+                          padding: const EdgeInsets.all(8.0),
+                          height: 35,
+                          width: 100,
+                          color: getButtonColor(device.state),
+                          child: Center(
+                            child: Text(
+                              getButtonStateName(device.state),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                      )
+                    ],
+                  ),
+                  const SizedBox(
+                    height: 8.0,
+                  ),
+                  const Divider(
+                    height: 1,
+                    color: Colors.grey,
+                  )
+                ],
+              ),
+            );
+          },
+        );
+      }),
     );
+  }
+
+  String getStateName(SessionState state) {
+    switch (state) {
+      case SessionState.notConnected:
+        return "disconnected";
+      case SessionState.connecting:
+        return "waiting";
+      default:
+        return "connected";
+    }
+  }
+
+  String getButtonStateName(SessionState state) {
+    switch (state) {
+      case SessionState.notConnected:
+      case SessionState.connecting:
+        return "Connect";
+      default:
+        return "Disconnect";
+    }
+  }
+
+  Color getStateColor(SessionState state) {
+    switch (state) {
+      case SessionState.notConnected:
+        return Colors.black;
+      case SessionState.connecting:
+        return Colors.grey;
+      default:
+        return Colors.green;
+    }
+  }
+
+  Color getButtonColor(SessionState state) {
+    switch (state) {
+      case SessionState.notConnected:
+      case SessionState.connecting:
+        return Colors.green;
+      default:
+        return Colors.red;
+    }
   }
 }

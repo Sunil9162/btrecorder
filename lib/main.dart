@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:btrecorder/home_page.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
@@ -7,7 +9,9 @@ late List<CameraDescription> cameras;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  cameras = await availableCameras();
+  if (Platform.isAndroid || Platform.isIOS) {
+    cameras = await availableCameras();
+  }
   runApp(const MainApp());
 }
 

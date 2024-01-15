@@ -1,8 +1,14 @@
+import 'dart:developer';
+import 'dart:io';
+
+import 'package:battery_plus/battery_plus.dart';
 import 'package:btrecorder/controller.dart';
 import 'package:camera/camera.dart';
+import 'package:file_saver/file_saver.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:path_provider/path_provider.dart';
 
 import 'settings_page.dart';
 
@@ -18,14 +24,75 @@ class _HomePageState extends State<HomePage> {
 
   late List<CameraDescription> cameras;
   late CameraController controller;
+  late Stream batteryStream;
+  final battery = Battery();
   RxBool isRecording = false.obs;
   RxBool isLoading = true.obs;
   RxBool isFlashOn = false.obs;
+  RxInt batteryLevel = 0.obs;
 
   @override
   void initState() {
     super.initState();
-    initCamera();
+    if (Platform.isAndroid || Platform.isIOS) {
+      initCamera();
+    }
+    batteryStream = Stream.periodic(
+      const Duration(seconds: 5),
+    );
+
+    batteryStream.listen((event) async {
+      batteryLevel.value = await battery.batteryLevel;
+      log("Battery level is ${batteryLevel.value}");
+      if (batteryLevel.value <= 5) {
+        stopRecording();
+        log("Video Stopped Recorded Succesfully ");
+      }
+    });
+    homeController.receivedData.listen((p0) {
+      final data = p0;
+      if (data['message'] == "StopRecording") {
+        stopRecording();
+      } else if (data['message'] == "StartRecording") {
+        startRecording();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
+  }
+
+  stopRecording() async {
+    if (isRecording.value) {
+      Get.dialog(const Center(
+        child: CircularProgressIndicator(),
+      ));
+      final file = await controller.stopVideoRecording();
+      // Save File to Local Storage
+      final filepath = await FileSaver.instance.saveFile(
+        name:
+            'BTRecorder_${homeController.deviceType.value == DeviceType.advertiser ? "left" : "right"}_${DateTime.now().millisecondsSinceEpoch}.mp4',
+        file: File(file.path),
+        mimeType: MimeType.other,
+      );
+      Get.back();
+      log("Saved to $filepath");
+      isRecording.value = false;
+    }
+  }
+
+  startRecording() {
+    if (controller.value.isInitialized) {
+      if (controller.value.isRecordingVideo) {
+        controller.stopVideoRecording();
+        isRecording.value = false;
+      } else {
+        controller.startVideoRecording();
+        isRecording.value = true;
+      }
+    }
   }
 
   Future<void> initCamera() async {
@@ -118,79 +185,94 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
                     padding: const EdgeInsets.all(16),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        IconButton(
-                          onPressed: () {
-                            if (controller.value.isInitialized) {
-                              if (controller.value.flashMode == FlashMode.off) {
-                                controller.setFlashMode(FlashMode.torch);
-                                isFlashOn.value = true;
-                              } else {
-                                controller.setFlashMode(FlashMode.off);
-                                isFlashOn.value = false;
+                    child: SafeArea(
+                      top: false,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          IconButton(
+                            onPressed: () async {
+                              final Directory directory =
+                                  await getApplicationDocumentsDirectory();
+
+                              final List<FileSystemEntity> files =
+                                  directory.listSync();
+                              List<String> recordedData = [];
+                              for (final FileSystemEntity file in files) {
+                                recordedData.addIf(
+                                  file.path.endsWith(".mp4"),
+                                  file.path,
+                                );
                               }
-                            }
-                          },
-                          icon: Icon(
-                            isFlashOn.value ? Icons.flash_on : Icons.flash_off,
-                            color: Colors.white,
-                          ),
-                        ),
-                        GestureDetector(
-                          onTap: () async {
-                            if (controller.value.isInitialized) {
-                              if (controller.value.isRecordingVideo) {
-                                await controller.stopVideoRecording();
-                                isRecording.value = false;
-                              } else {
-                                await controller.startVideoRecording();
-                                isRecording.value = true;
+                              log("Recorded Paths are $recordedData");
+                              for (var rec in recordedData) {
+                                log("is mp4 contiains ${rec.contains(".mp4")}");
                               }
-                            }
-                          },
-                          child: Container(
-                            height: 80,
-                            width: 80,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: Colors.white,
-                                width: 4,
-                              ),
+                            },
+                            icon: Icon(
+                              isFlashOn.value
+                                  ? Icons.flash_on
+                                  : Icons.flash_off,
+                              color: Colors.white,
                             ),
-                            child: Obx(
-                              () => Center(
-                                child: Container(
-                                  height: 60,
-                                  width: 60,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: isRecording.value
-                                        ? Colors.red
-                                        : Colors.white,
+                          ),
+                          GestureDetector(
+                            onTap: () async {
+                              if (isRecording.value) {
+                                await stopRecording();
+                                homeController.sendData(
+                                  "StopRecording",
+                                );
+                              } else {
+                                await startRecording();
+                                homeController.sendData(
+                                  "StartRecording",
+                                );
+                              }
+                            },
+                            child: Container(
+                              height: 80,
+                              width: 80,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.white,
+                                  width: 4,
+                                ),
+                              ),
+                              child: Obx(
+                                () => Center(
+                                  child: Container(
+                                    height: 60,
+                                    width: 60,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: isRecording.value
+                                          ? Colors.red
+                                          : Colors.white,
+                                    ),
                                   ),
                                 ),
                               ),
                             ),
                           ),
-                        ),
-                        IconButton(
-                          onPressed: () {
-                            if (controller.value.isInitialized) {
-                              final newCamera = cameras.firstWhere((element) =>
-                                  element.lensDirection !=
-                                  controller.description.lensDirection);
-                              _initCameraController(newCamera);
-                            }
-                          },
-                          icon: const Icon(
-                            Icons.flip_camera_ios,
-                            color: Colors.white,
+                          IconButton(
+                            onPressed: () {
+                              if (controller.value.isInitialized) {
+                                final newCamera = cameras.firstWhere(
+                                    (element) =>
+                                        element.lensDirection !=
+                                        controller.description.lensDirection);
+                                _initCameraController(newCamera);
+                              }
+                            },
+                            icon: const Icon(
+                              Icons.flip_camera_ios,
+                              color: Colors.white,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ],
